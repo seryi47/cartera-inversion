@@ -1,0 +1,135 @@
+"use server";
+
+import { sql } from "@/lib/db";
+import { auth, signIn, signOut } from "@/auth";
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
+import { DEFAULT_PORTFOLIO } from "@/lib/default-portfolio";
+import { AuthError } from "next-auth";
+
+export async function loginAction(_prevState: unknown, formData: FormData) {
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const password = String(formData.get("password") || "");
+
+  try {
+    await signIn("credentials", { email, password, redirect: false });
+  } catch (e) {
+    if (e instanceof AuthError) {
+      return { error: "Email o contraseña incorrectos." };
+    }
+    throw e;
+  }
+
+  redirect("/");
+}
+
+export async function signUpAction(_prevState: unknown, formData: FormData) {
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  const password = String(formData.get("password") || "");
+
+  if (!email || password.length < 6) {
+    return { error: "Email no válido o contraseña demasiado corta (mínimo 6 caracteres)." };
+  }
+
+  const existing = await sql`SELECT id FROM users WHERE email = ${email}`;
+  if (existing.length > 0) {
+    return { error: "Ya existe una cuenta con ese email." };
+  }
+
+  const hash = await bcrypt.hash(password, 10);
+  const inserted = await sql`
+    INSERT INTO users (email, password_hash) VALUES (${email}, ${hash}) RETURNING id
+  `;
+  const userId = inserted[0].id as number;
+
+  for (let i = 0; i < DEFAULT_PORTFOLIO.length; i++) {
+    const f = DEFAULT_PORTFOLIO[i];
+    await sql`
+      INSERT INTO funds (user_id, name, isin, target_weight, ter, sort_order)
+      VALUES (${userId}, ${f.name}, ${f.isin}, ${f.target_weight}, ${f.ter}, ${i})
+    `;
+  }
+
+  try {
+    await signIn("credentials", { email, password, redirect: false });
+  } catch (e) {
+    if (e instanceof AuthError) {
+      return { error: "Cuenta creada, pero el inicio de sesión automático falló. Entra manualmente." };
+    }
+    throw e;
+  }
+
+  redirect("/");
+}
+
+export async function addContributionRoundAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  const userId = Number((session.user as { id: string }).id);
+
+  const date = String(formData.get("date") || "");
+  const mode = String(formData.get("mode") || "auto");
+  const roundId = randomUUID();
+
+  if (!date) return { error: "Falta la fecha." };
+
+  const funds = await sql`
+    SELECT id, target_weight FROM funds WHERE user_id = ${userId} ORDER BY sort_order
+  `;
+
+  if (mode === "auto") {
+    const total = Number(formData.get("total") || 0);
+    if (!total || total <= 0) return { error: "Importe total no válido." };
+    for (const f of funds) {
+      const amount = Math.round(total * Number(f.target_weight) * 100) / 100;
+      if (amount > 0) {
+        await sql`
+          INSERT INTO contributions (user_id, fund_id, round_id, date, amount)
+          VALUES (${userId}, ${f.id}, ${roundId}, ${date}, ${amount})
+        `;
+      }
+    }
+  } else {
+    // modo manual: un importe por fondo, campos "amount_<fund_id>"
+    for (const f of funds) {
+      const raw = formData.get(`amount_${f.id}`);
+      const amount = Number(raw || 0);
+      if (amount > 0) {
+        await sql`
+          INSERT INTO contributions (user_id, fund_id, round_id, date, amount)
+          VALUES (${userId}, ${f.id}, ${roundId}, ${date}, ${amount})
+        `;
+      }
+    }
+  }
+
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function deleteRoundAction(roundId: string) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  const userId = Number((session.user as { id: string }).id);
+
+  await sql`DELETE FROM contributions WHERE round_id = ${roundId} AND user_id = ${userId}`;
+  revalidatePath("/");
+}
+
+export async function updateFundWeightAction(fundId: number, weight: number) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  const userId = Number((session.user as { id: string }).id);
+
+  await sql`
+    UPDATE funds SET target_weight = ${weight}
+    WHERE id = ${fundId} AND user_id = ${userId}
+  `;
+  revalidatePath("/");
+}
+
+export async function signOutAction() {
+  await signOut({ redirectTo: "/login" });
+}
