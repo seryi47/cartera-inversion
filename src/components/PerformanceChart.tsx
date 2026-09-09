@@ -28,6 +28,14 @@ const PERIODS: { key: Period; label: string }[] = [
 const DAY_MS = 24 * 60 * 60 * 1000;
 const fmt = (n: number) => new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
 
+const PERIOD_GAIN_LABEL: Record<Period, string> = {
+  hoy: "hoy",
+  semana: "esta semana",
+  mes: "este mes",
+  año: "este año",
+  max: "en total",
+};
+
 function cutoffFor(period: Period): number | null {
   const now = Date.now();
   if (period === "hoy") {
@@ -102,9 +110,18 @@ export default function PerformanceChart({ daily, intraday }: { daily: DailyPoin
 
   const lastDaily = daily[daily.length - 1];
   const last = filtered.length > 0 ? filtered[filtered.length - 1] : { x: 0, value: lastDaily.value, costBasis: lastDaily.costBasis };
-  const gain = last.value - last.costBasis;
-  const gainPct = last.costBasis > 0 ? (gain / last.costBasis) * 100 : 0;
-  const isPositive = gain >= 0;
+  const first = filtered.length > 0 ? filtered[0] : last;
+
+  // ganancia SOLO del periodo seleccionado (no la de toda la vida): la
+  // diferencia entre la ganancia acumulada al final y al principio de la
+  // ventana. Restar así (en vez de comparar valores brutos) hace que una
+  // aportación nueva metida durante el periodo no se cuente como "beneficio"
+  const gainAtStart = first.value - first.costBasis;
+  const gainNow = last.value - last.costBasis;
+  const periodGain = gainNow - gainAtStart;
+  const periodGainBase = first.value > 0 ? first.value : last.costBasis;
+  const periodGainPct = periodGainBase > 0 ? (periodGain / periodGainBase) * 100 : 0;
+  const isPositive = periodGain >= 0;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
@@ -138,11 +155,11 @@ export default function PerformanceChart({ daily, intraday }: { daily: DailyPoin
           <p className="text-xl font-bold text-slate-900">{fmt(last.costBasis)}</p>
         </div>
         <div>
-          <p className="text-xs text-slate-500">Ganancia/Pérdida</p>
+          <p className="text-xs text-slate-500">Ganancia/Pérdida ({PERIOD_GAIN_LABEL[period]})</p>
           <p className={`text-xl font-bold ${isPositive ? "text-green-600" : "text-red-600"}`}>
             {isPositive ? "+" : ""}
-            {fmt(gain)} ({isPositive ? "+" : ""}
-            {gainPct.toFixed(1)}%)
+            {fmt(periodGain)} ({isPositive ? "+" : ""}
+            {periodGainPct.toFixed(1)}%)
           </p>
         </div>
       </div>
