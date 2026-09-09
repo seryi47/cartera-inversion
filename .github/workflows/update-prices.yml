@@ -1,24 +1,33 @@
 name: Actualizar precios
 
-# Vercel Hobby solo deja crons de 1 vez al día — este workflow releva a Vercel
-# Cron para tener precio fresco cada ~15 min y que la gráfica de rentabilidad
-# tenga resolución de horas en las vistas cortas (hoy / semana).
+# Igual que BotTrading (vigilar.yml): un job LARGO que llama al endpoint en
+# bucle durante horas, en vez de depender de que GitHub dispare el "schedule"
+# puntualmente cada 15 min (el registro de un cron nuevo puede tardar mucho
+# en activarse la primera vez — workflow_dispatch, en cambio, es instantáneo
+# y fiable). El schedule de aquí abajo es solo el respaldo/relevo por si este
+# job se cae o llega a su límite de tiempo.
 on:
-  # nota: tras crear/editar este workflow, GitHub puede tardar entre 15 min y
-  # más de 1h en "reconocer" el cron por primera vez — un push nuevo a esta
-  # rama fuerza a GitHub a resincronizar el schedule
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/15 * * * *"   # respaldo/relevo
   workflow_dispatch: {}
 
+concurrency:
+  group: update-prices-loop
+  cancel-in-progress: false
+
 jobs:
-  ping:
+  loop:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 340
     steps:
-      - name: Llamar al endpoint de precios
+      - name: Comprobar precios en bucle (cada 15 min, ~5h33m por ejecución)
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -sf -H "Authorization: Bearer $CRON_SECRET" \
-            https://inversiones-matriominales.vercel.app/api/cron/update-prices
+          END=$((SECONDS + 20000))
+          while [ $SECONDS -lt $END ]; do
+            curl -sf -H "Authorization: Bearer $CRON_SECRET" \
+              https://inversiones-matriominales.vercel.app/api/cron/update-prices || true
+            echo "--- comprobado a las $(date -u +%H:%M:%S) UTC, durmiendo 15 min ---"
+            sleep 900
+          done
