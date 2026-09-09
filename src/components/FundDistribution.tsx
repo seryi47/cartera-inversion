@@ -7,6 +7,14 @@ type Fund = { id: number; name: string; isin: string | null; target_weight: numb
 
 const fmt = (n: number) => new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
 
+const FUND_DESCRIPTIONS: Record<string, string> = {
+  IE000ZYRH0Q7: "bolsa de países desarrollados",
+  IE000QAZP7L2: "bolsa de mercados emergentes",
+  IE00BF4RFH31: "empresas pequeñas (small cap)",
+  IE00B18GC888: "bonos globales (renta fija)",
+  IE00B579F325: "oro físico",
+};
+
 export default function FundDistribution({
   funds,
   totalByFund,
@@ -51,7 +59,12 @@ export default function FundDistribution({
           <div key={f.id}>
             <div className="flex flex-wrap justify-between items-center text-sm mb-1 gap-x-2 gap-y-1">
               <span className="font-medium text-slate-800">
-                {f.name} {f.isin && <span className="text-slate-400 font-normal">({f.isin})</span>}
+                {f.name}{" "}
+                {f.isin && (
+                  <span className="text-slate-400 font-normal">
+                    ({f.isin}{FUND_DESCRIPTIONS[f.isin] ? ` — ${FUND_DESCRIPTIONS[f.isin]}` : ""})
+                  </span>
+                )}
               </span>
               <span className="text-slate-600 flex items-center gap-2">
                 <span>
