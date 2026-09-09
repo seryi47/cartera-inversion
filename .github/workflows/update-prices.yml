@@ -4,6 +4,9 @@ name: Actualizar precios
 # Cron para tener precio fresco cada ~15 min y que la gráfica de rentabilidad
 # tenga resolución de horas en las vistas cortas (hoy / semana).
 on:
+  # nota: tras crear/editar este workflow, GitHub puede tardar entre 15 min y
+  # más de 1h en "reconocer" el cron por primera vez — un push nuevo a esta
+  # rama fuerza a GitHub a resincronizar el schedule
   schedule:
     - cron: "*/15 * * * *"
   workflow_dispatch: {}
