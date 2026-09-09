@@ -15,6 +15,34 @@ const FUND_DESCRIPTIONS: Record<string, string> = {
   IE00B579F325: "oro físico",
 };
 
+const FUND_INFO: Record<string, { icon: string; explanation: string }> = {
+  IE000ZYRH0Q7: {
+    icon: "🌍",
+    explanation:
+      "Fondo indexado que reparte tu dinero entre miles de empresas grandes y medianas de países desarrollados (EEUU, Europa, Japón...). Es la base de la cartera: mucha diversificación y comisiones muy bajas, sigue el crecimiento de la economía mundial a largo plazo.",
+  },
+  IE000QAZP7L2: {
+    icon: "📈",
+    explanation:
+      "Invierte en empresas de países en desarrollo (China, India, Brasil, etc). Suele tener más potencial de crecimiento a largo plazo, pero también sube y baja más que el fondo de países desarrollados.",
+  },
+  IE00BF4RFH31: {
+    icon: "🏢",
+    explanation:
+      "Empresas pequeñas de países desarrollados — no las grandes multinacionales que ya están en el primer fondo. Históricamente pueden crecer más con los años, a cambio de más altibajos por el camino.",
+  },
+  IE00B18GC888: {
+    icon: "📜",
+    explanation:
+      "Bonos (deuda) de gobiernos y grandes empresas de todo el mundo. Es la parte \"tranquila\" de la cartera: da menos rentabilidad que la bolsa, pero amortigua el golpe cuando la bolsa cae.",
+  },
+  IE00B579F325: {
+    icon: "🥇",
+    explanation:
+      "Oro físico de verdad, guardado en cámaras acorazadas (no acciones de una minera). Suele funcionar como \"seguro\": cuando la bolsa o la economía van mal, el oro tiende a mantener o subir su valor.",
+  },
+};
+
 export default function FundDistribution({
   funds,
   totalByFund,
@@ -27,6 +55,7 @@ export default function FundDistribution({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [pending, startTransition] = useTransition();
+  const [showInfo, setShowInfo] = useState(false);
 
   const weightSum = funds.reduce((acc, f) => acc + Number(f.target_weight), 0) * 100;
 
@@ -44,6 +73,34 @@ export default function FundDistribution({
 
   return (
     <div className="space-y-4">
+      <button
+        onClick={() => setShowInfo((v) => !v)}
+        className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800"
+      >
+        <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">
+          i
+        </span>
+        {showInfo ? "Ocultar explicación de cada fondo" : "¿Qué es cada fondo? (para quien no tenga ni idea)"}
+      </button>
+
+      {showInfo && (
+        <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-lg p-4">
+          {funds.map((f) => {
+            const info = f.isin ? FUND_INFO[f.isin] : undefined;
+            if (!info) return null;
+            return (
+              <div key={f.id} className="flex gap-3">
+                <span className="text-xl leading-none">{info.icon}</span>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">{f.name}</p>
+                  <p className="text-xs text-slate-600 mt-0.5">{info.explanation}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {Math.abs(weightSum - 100) >= 0.5 && (
         <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           Los objetivos suman {weightSum.toFixed(1)}% — deberían sumar 100%.
