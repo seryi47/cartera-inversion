@@ -10,17 +10,32 @@ export async function GET(request: Request) {
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  // un único instante para TODO el lote — si cada fondo guardara su propio
+  // now(), durante los primeros milisegundos habría fondos "sin precio
+  // todavía" y la gráfica intradía mostraría un valor de cartera incompleto
+  // (solo el fondo que ya tenía fila) antes de completarse una fracción de
+  // segundo después, con pinta de bajón/subida que nunca existió de verdad
+  const runTs = new Date().toISOString();
   const results: Record<string, string> = {};
 
-  for (const isin of Object.keys(FUND_TICKERS)) {
+  const isins = Object.keys(FUND_TICKERS);
+  const prices = await Promise.allSettled(isins.map((isin) => getFundPriceEur(isin)));
+
+  for (let i = 0; i < isins.length; i++) {
+    const isin = isins[i];
+    const result = prices[i];
+    if (result.status === "rejected") {
+      results[isin] = `error: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`;
+      continue;
+    }
+    const price = result.value;
     try {
-      const price = await getFundPriceEur(isin);
       await sql`
         INSERT INTO price_history (isin, date, price_eur)
         VALUES (${isin}, ${today}, ${price})
         ON CONFLICT (isin, date) DO UPDATE SET price_eur = EXCLUDED.price_eur
       `;
-      await sql`INSERT INTO price_snapshots (isin, price_eur) VALUES (${isin}, ${price})`;
+      await sql`INSERT INTO price_snapshots (isin, ts, price_eur) VALUES (${isin}, ${runTs}, ${price})`;
       results[isin] = `ok: ${price.toFixed(4)} EUR`;
     } catch (e) {
       results[isin] = `error: ${e instanceof Error ? e.message : String(e)}`;
