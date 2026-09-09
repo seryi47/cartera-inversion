@@ -89,10 +89,20 @@ export default function PerformanceChart({ daily, intraday }: { daily: DailyPoin
 
   const yDomain = useMemo((): [number, number] => {
     if (filtered.length === 0) return [0, 1];
-    const values = filtered.flatMap((p) => [p.value, p.costBasis]);
+    // en Hoy/Semana el "Aportado" casi nunca cambia en pocas horas o días,
+    // pero puede estar muy por debajo del valor actual (crecimiento
+    // acumulado de mucho antes) — si entra en el cálculo del rango, ese
+    // hueco domina el eje y aplasta el movimiento real y pequeño de estos
+    // periodos cortos, que es justo lo que se quiere ver con detalle aquí
+    const values = usesIntraday ? filtered.map((p) => p.value) : filtered.flatMap((p) => [p.value, p.costBasis]);
     const min = Math.min(...values);
     const max = Math.max(...values);
-    const pad = Math.max((max - min) * 0.1, max * 0.01, 1);
+    const range = max - min;
+    // el margen es proporcional a la variación REAL de la ventana — un
+    // suelo fijo (p.ej. 1% del valor total) aplasta movimientos pequeños de
+    // verdad: en una cartera de 450€, 1% son 4,5€ de margen quitándole
+    // visibilidad a un movimiento real de solo 1€ en una semana
+    const pad = range > 0 ? range * 0.15 : Math.max(max * 0.005, 0.5);
     return [Math.max(0, min - pad), max + pad];
   }, [filtered]);
 
@@ -122,6 +132,9 @@ export default function PerformanceChart({ daily, intraday }: { daily: DailyPoin
   const periodGainBase = first.value > 0 ? first.value : last.costBasis;
   const periodGainPct = periodGainBase > 0 ? (periodGain / periodGainBase) * 100 : 0;
   const isPositive = periodGain >= 0;
+  // el color del propio gráfico refleja si el periodo elegido está en
+  // positivo o negativo, no siempre el mismo azul pase lo que pase
+  const lineColor = isPositive ? "#16a34a" : "#dc2626";
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
@@ -171,8 +184,8 @@ export default function PerformanceChart({ daily, intraday }: { daily: DailyPoin
               <ComposedChart data={filtered} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="valueFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                    <stop offset="5%" stopColor={lineColor} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={lineColor} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -195,18 +208,22 @@ export default function PerformanceChart({ daily, intraday }: { daily: DailyPoin
                   labelFormatter={(label) => labelFormat(Number(label), period)}
                   contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13 }}
                 />
-                <Area type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={2} fill="url(#valueFill)" />
-                <Line type="monotone" dataKey="costBasis" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
+                <Area type="monotone" dataKey="value" stroke={lineColor} strokeWidth={2} fill="url(#valueFill)" />
+                {!usesIntraday && (
+                  <Line type="monotone" dataKey="costBasis" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           <div className="flex gap-4 mt-2 text-xs text-slate-500">
             <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-0.5 bg-blue-600" /> Valor de la cartera
+              <span className="inline-block w-3 h-0.5" style={{ backgroundColor: lineColor }} /> Valor de la cartera
             </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-0.5 bg-slate-400" style={{ borderTop: "1.5px dashed #94a3b8" }} /> Aportado
-            </span>
+            {!usesIntraday && (
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-0.5 bg-slate-400" style={{ borderTop: "1.5px dashed #94a3b8" }} /> Aportado
+              </span>
+            )}
           </div>
         </>
       ) : (
