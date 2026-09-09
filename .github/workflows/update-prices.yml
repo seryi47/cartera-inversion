@@ -1,0 +1,21 @@
+name: Actualizar precios
+
+# Vercel Hobby solo deja crons de 1 vez al día — este workflow releva a Vercel
+# Cron para tener precio fresco cada ~15 min y que la gráfica de rentabilidad
+# tenga resolución de horas en las vistas cortas (hoy / semana).
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Llamar al endpoint de precios
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -sf -H "Authorization: Bearer $CRON_SECRET" \
+            https://inversiones-matriominales.vercel.app/api/cron/update-prices

@@ -159,6 +159,8 @@ export async function updateFundWeightAction(fundId: number, weight: number) {
   if (!session?.user) redirect("/login");
   const userId = Number((session.user as { id: string }).id);
 
+  if (!Number.isFinite(weight) || weight < 0 || weight > 1) return;
+
   await sql`
     UPDATE funds SET target_weight = ${weight}
     WHERE id = ${fundId} AND user_id = ${userId}

@@ -12,38 +12,72 @@ import {
   CartesianGrid,
 } from "recharts";
 
-type Point = { date: string; value: number; costBasis: number };
-type Period = "semana" | "mes" | "año" | "max";
+type DailyPoint = { date: string; value: number; costBasis: number };
+type IntradayPoint = { ts: number; value: number; costBasis: number };
+type ChartPoint = { x: number; value: number; costBasis: number };
+type Period = "hoy" | "semana" | "mes" | "año" | "max";
 
 const PERIODS: { key: Period; label: string }[] = [
+  { key: "hoy", label: "Hoy" },
   { key: "semana", label: "Semana" },
   { key: "mes", label: "Mes" },
   { key: "año", label: "Año" },
   { key: "max", label: "Máximo" },
 ];
 
+const DAY_MS = 24 * 60 * 60 * 1000;
 const fmt = (n: number) => new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
 
-function cutoffFor(period: Period): Date | null {
-  const now = new Date();
-  if (period === "semana") return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  if (period === "mes") return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-  if (period === "año") return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+function cutoffFor(period: Period): number | null {
+  const now = Date.now();
+  if (period === "hoy") {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  }
+  if (period === "semana") return now - 7 * DAY_MS;
+  if (period === "mes") return now - 31 * DAY_MS;
+  if (period === "año") return now - 366 * DAY_MS;
   return null; // max
 }
 
-export default function PerformanceChart({ data }: { data: Point[] }) {
+function tickFormat(x: number, period: Period): string {
+  const opts: Intl.DateTimeFormatOptions =
+    period === "hoy"
+      ? { hour: "2-digit", minute: "2-digit" }
+      : period === "semana"
+        ? { weekday: "short", hour: "2-digit", minute: "2-digit" }
+        : period === "max"
+          ? { month: "short", year: "numeric" }
+          : { day: "2-digit", month: "short" };
+  return new Intl.DateTimeFormat("es-ES", opts).format(new Date(x));
+}
+
+function labelFormat(x: number, period: Period): string {
+  const opts: Intl.DateTimeFormatOptions =
+    period === "hoy" || period === "semana"
+      ? { day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit" }
+      : { day: "2-digit", month: "long", year: "numeric" };
+  return new Intl.DateTimeFormat("es-ES", opts).format(new Date(x));
+}
+
+export default function PerformanceChart({ daily, intraday }: { daily: DailyPoint[]; intraday: IntradayPoint[] }) {
   const [period, setPeriod] = useState<Period>("mes");
+  const usesIntraday = period === "hoy" || period === "semana";
+
+  const allPoints: ChartPoint[] = useMemo(() => {
+    if (usesIntraday) return intraday.map((p) => ({ x: p.ts, value: p.value, costBasis: p.costBasis }));
+    return daily.map((p) => ({ x: Date.parse(p.date + "T00:00:00Z"), value: p.value, costBasis: p.costBasis }));
+  }, [usesIntraday, daily, intraday]);
 
   const filtered = useMemo(() => {
     const cutoff = cutoffFor(period);
-    if (!cutoff) return data;
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
-    const idx = data.findIndex((p) => p.date >= cutoffStr);
-    return idx <= 0 ? data : data.slice(Math.max(0, idx - 1));
-  }, [data, period]);
+    if (cutoff == null) return allPoints;
+    const idx = allPoints.findIndex((p) => p.x >= cutoff);
+    return idx <= 0 ? allPoints : allPoints.slice(Math.max(0, idx - 1));
+  }, [allPoints, period]);
 
-  if (data.length === 0) {
+  if (daily.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
         <h2 className="font-semibold mb-2">Rentabilidad real</h2>
@@ -55,11 +89,11 @@ export default function PerformanceChart({ data }: { data: Point[] }) {
     );
   }
 
-  const last = filtered[filtered.length - 1];
+  const lastDaily = daily[daily.length - 1];
+  const last = filtered.length > 0 ? filtered[filtered.length - 1] : { x: 0, value: lastDaily.value, costBasis: lastDaily.costBasis };
   const gain = last.value - last.costBasis;
   const gainPct = last.costBasis > 0 ? (gain / last.costBasis) * 100 : 0;
   const isPositive = gain >= 0;
-  const hasEnoughForChart = filtered.length >= 2;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
@@ -102,7 +136,7 @@ export default function PerformanceChart({ data }: { data: Point[] }) {
         </div>
       </div>
 
-      {hasEnoughForChart ? (
+      {filtered.length >= 2 ? (
         <>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -115,11 +149,11 @@ export default function PerformanceChart({ data }: { data: Point[] }) {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis
-                  dataKey="date"
+                  dataKey="x"
+                  type="number"
+                  domain={["dataMin", "dataMax"]}
                   tick={{ fontSize: 11, fill: "#64748b" }}
-                  tickFormatter={(d: string) =>
-                    new Date(d + "T00:00:00Z").toLocaleDateString("es-ES", { day: "2-digit", month: "short", timeZone: "UTC" })
-                  }
+                  tickFormatter={(x: number) => tickFormat(x, period)}
                   minTickGap={40}
                 />
                 <YAxis
@@ -130,14 +164,7 @@ export default function PerformanceChart({ data }: { data: Point[] }) {
                 />
                 <Tooltip
                   formatter={(value, name) => [fmt(Number(value)), name === "value" ? "Valor" : "Aportado"]}
-                  labelFormatter={(label) =>
-                    new Date(String(label) + "T00:00:00Z").toLocaleDateString("es-ES", {
-                      day: "2-digit",
-                      month: "long",
-                      year: "numeric",
-                      timeZone: "UTC",
-                    })
-                  }
+                  labelFormatter={(label) => labelFormat(Number(label), period)}
                   contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13 }}
                 />
                 <Area type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={2} fill="url(#valueFill)" />
@@ -157,8 +184,9 @@ export default function PerformanceChart({ data }: { data: Point[] }) {
       ) : (
         <div className="h-40 flex items-center justify-center rounded-lg bg-slate-50 border border-dashed border-slate-200">
           <p className="text-sm text-slate-500 text-center px-6">
-            Con un solo día de datos aún no hay curva que dibujar — vuelve mañana (o registra otra
-            aportación en otra fecha) y aquí aparecerá la evolución.
+            {usesIntraday
+              ? "Todavía no hay suficientes precios de hoy — se actualizan cada 15 min, vuelve en un rato."
+              : "Con un solo día de datos aún no hay curva que dibujar — vuelve mañana (o registra otra aportación en otra fecha) y aquí aparecerá la evolución."}
           </p>
         </div>
       )}

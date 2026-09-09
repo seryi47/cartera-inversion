@@ -3,10 +3,11 @@ import { sql } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import AddContributionForm from "@/components/AddContributionForm";
+import FundDistribution from "@/components/FundDistribution";
 import DeleteRoundButton from "@/components/DeleteRoundButton";
 import SignOutButton from "@/components/SignOutButton";
 import PerformanceChart from "@/components/PerformanceChart";
-import { getPortfolioPerformance } from "@/lib/portfolio-performance";
+import { getPortfolioPerformance, getPortfolioPerformanceIntraday } from "@/lib/portfolio-performance";
 
 type Fund = {
   id: number;
@@ -32,8 +33,8 @@ export default async function DashboardPage() {
     GROUP BY fund_id
   `) as unknown as { fund_id: number; total: number }[];
 
-  const totalByFund = new Map<number, number>();
-  for (const t of totals) totalByFund.set(t.fund_id, Number(t.total));
+  const totalByFund: Record<number, number> = {};
+  for (const t of totals) totalByFund[t.fund_id] = Number(t.total);
 
   const totalInvested = totals.reduce((acc, t) => acc + Number(t.total), 0);
 
@@ -45,7 +46,10 @@ export default async function DashboardPage() {
     LIMIT 50
   `) as unknown as { round_id: string; date: string; total: number }[];
 
-  const performance = await getPortfolioPerformance(userId);
+  const [performance, performanceIntraday] = await Promise.all([
+    getPortfolioPerformance(userId),
+    getPortfolioPerformanceIntraday(userId),
+  ]);
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(n);
@@ -71,7 +75,7 @@ export default async function DashboardPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
-        <PerformanceChart data={performance} />
+        <PerformanceChart daily={performance} intraday={performanceIntraday} />
 
         <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
@@ -86,45 +90,11 @@ export default async function DashboardPage() {
 
         <section className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
           <h2 className="font-semibold mb-4 text-slate-900">Distribución — objetivo vs real</h2>
-          <div className="space-y-4">
-            {funds.map((f) => {
-              const actual = totalByFund.get(f.id) || 0;
-              const actualPct = totalInvested > 0 ? (actual / totalInvested) * 100 : 0;
-              const targetPct = Number(f.target_weight) * 100;
-              const drift = actualPct - targetPct;
-              return (
-                <div key={f.id}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="font-medium text-slate-800">
-                      {f.name}{" "}
-                      {f.isin && <span className="text-slate-400 font-normal">({f.isin})</span>}
-                    </span>
-                    <span className="text-slate-600">
-                      {fmt(actual)} · {actualPct.toFixed(1)}% objetivo {targetPct.toFixed(0)}%
-                      {Math.abs(drift) >= 2 && (
-                        <span className={drift > 0 ? "text-amber-600" : "text-blue-600"}>
-                          {" "}
-                          ({drift > 0 ? "+" : ""}
-                          {drift.toFixed(1)} pts)
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-2 relative overflow-hidden">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full"
-                      style={{ width: `${Math.min(actualPct, 100)}%` }}
-                    />
-                    <div
-                      className="absolute top-0 h-2 w-0.5 bg-slate-500"
-                      style={{ left: `${Math.min(targetPct, 100)}%` }}
-                      title={`Objetivo: ${targetPct.toFixed(0)}%`}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <FundDistribution
+            funds={funds.map((f) => ({ id: f.id, name: f.name, isin: f.isin, target_weight: Number(f.target_weight) }))}
+            totalByFund={totalByFund}
+            totalInvested={totalInvested}
+          />
         </section>
 
         <section className="grid grid-cols-1 md:grid-cols-2 gap-6">

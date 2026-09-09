@@ -44,6 +44,18 @@ CREATE TABLE IF NOT EXISTS price_history (
 );
 CREATE INDEX IF NOT EXISTS idx_price_history_isin_date ON price_history(isin, date);
 
+-- Precios "intradía" (cada ~15 min, vía GitHub Actions) para poder dibujar la
+-- gráfica de rentabilidad con resolución de horas en las vistas cortas (hoy,
+-- semana). Se podan solos los de más de 30 días — para el largo plazo ya
+-- basta con el histórico diario de arriba.
+CREATE TABLE IF NOT EXISTS price_snapshots (
+  id SERIAL PRIMARY KEY,
+  isin TEXT NOT NULL,
+  ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+  price_eur NUMERIC NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_price_snapshots_isin_ts ON price_snapshots(isin, ts);
+
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
   id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
