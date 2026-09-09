@@ -28,6 +28,16 @@ CREATE TABLE IF NOT EXISTS contributions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token TEXT UNIQUE NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_reset_token ON password_reset_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_funds_user ON funds(user_id);
 CREATE INDEX IF NOT EXISTS idx_contrib_user ON contributions(user_id);
 CREATE INDEX IF NOT EXISTS idx_contrib_round ON contributions(round_id);

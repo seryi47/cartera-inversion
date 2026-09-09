@@ -1,11 +1,13 @@
 "use client";
 
 import { useActionState } from "react";
+import { use } from "react";
 import Link from "next/link";
-import { signUpAction } from "@/lib/actions";
+import { resetPasswordAction } from "@/lib/actions";
 
-export default function SignUpPage() {
-  const [state, formAction, pending] = useActionState(signUpAction, undefined);
+export default function ResetPasswordPage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = use(params);
+  const [state, formAction, pending] = useActionState(resetPasswordAction, undefined);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 px-4 py-12">
@@ -14,24 +16,14 @@ export default function SignUpPage() {
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white text-2xl font-bold shadow-lg shadow-blue-900/50">
             €
           </div>
-          <h1 className="mt-4 text-2xl font-bold text-white">Crear cuenta</h1>
-          <p className="mt-1 text-sm text-slate-300">
-            Sembraremos tu cartera con los 5 fondos ya definidos
-          </p>
+          <h1 className="mt-4 text-2xl font-bold text-white">Elegir nueva contraseña</h1>
         </div>
 
         <form action={formAction} className="bg-white p-8 rounded-2xl shadow-2xl">
-          <label className="block text-sm font-semibold text-slate-700 mb-1.5">Email</label>
-          <input
-            name="email"
-            type="email"
-            required
-            autoComplete="email"
-            className="w-full border border-slate-300 rounded-lg px-3 py-2.5 mb-4 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
+          <input type="hidden" name="token" value={token} />
 
           <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-            Contraseña <span className="font-normal text-slate-400">(mínimo 6 caracteres)</span>
+            Nueva contraseña <span className="font-normal text-slate-400">(mínimo 6 caracteres)</span>
           </label>
           <input
             name="password"
@@ -53,13 +45,12 @@ export default function SignUpPage() {
             disabled={pending}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-lg py-2.5 font-semibold transition shadow-sm"
           >
-            {pending ? "Creando..." : "Crear cuenta"}
+            {pending ? "Guardando..." : "Guardar contraseña"}
           </button>
 
           <p className="text-sm text-slate-600 mt-5 text-center">
-            ¿Ya tienes cuenta?{" "}
             <Link href="/login" className="text-blue-600 hover:text-blue-700 font-medium hover:underline">
-              Entrar
+              Volver a entrar
             </Link>
           </p>
         </form>

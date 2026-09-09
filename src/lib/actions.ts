@@ -8,6 +8,7 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 import { DEFAULT_PORTFOLIO } from "@/lib/default-portfolio";
 import { AuthError } from "next-auth";
+import { sendPasswordResetEmail } from "@/lib/email";
 
 export async function loginAction(_prevState: unknown, formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
@@ -132,4 +133,56 @@ export async function updateFundWeightAction(fundId: number, weight: number) {
 
 export async function signOutAction() {
   await signOut({ redirectTo: "/login" });
+}
+
+export async function forgotPasswordAction(_prevState: unknown, formData: FormData) {
+  const email = String(formData.get("email") || "").trim().toLowerCase();
+  if (!email) return { error: "Introduce un email." };
+
+  // Respuesta siempre igual exista o no la cuenta, para no filtrar qué emails están registrados.
+  const generic = { ok: true as const, message: "Si ese email tiene cuenta, te hemos mandado un enlace para restablecer la contraseña." };
+
+  const rows = await sql`SELECT id FROM users WHERE email = ${email}`;
+  const user = rows[0];
+  if (!user) return generic;
+
+  const token = randomUUID() + randomUUID();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+
+  await sql`
+    INSERT INTO password_reset_tokens (user_id, token, expires_at)
+    VALUES (${user.id}, ${token}, ${expiresAt.toISOString()})
+  `;
+
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const resetUrl = `${baseUrl}/reset-password/${token}`;
+  const result = await sendPasswordResetEmail(email, resetUrl);
+
+  if (!result.ok) {
+    console.error("[forgotPasswordAction] no se pudo enviar el email:", result.reason);
+  }
+
+  return generic;
+}
+
+export async function resetPasswordAction(_prevState: unknown, formData: FormData) {
+  const token = String(formData.get("token") || "");
+  const password = String(formData.get("password") || "");
+
+  if (!token) return { error: "Enlace no válido." };
+  if (password.length < 6) return { error: "La contraseña debe tener al menos 6 caracteres." };
+
+  const rows = await sql`
+    SELECT id, user_id, expires_at, used_at FROM password_reset_tokens WHERE token = ${token}
+  `;
+  const record = rows[0];
+  if (!record) return { error: "Enlace no válido o ya usado." };
+  if (record.used_at) return { error: "Este enlace ya se usó. Pide uno nuevo." };
+  if (new Date(record.expires_at as string) < new Date()) return { error: "Este enlace ha caducado. Pide uno nuevo." };
+
+  const hash = await bcrypt.hash(password, 10);
+  await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${record.user_id}`;
+  await sql`UPDATE password_reset_tokens SET used_at = now() WHERE id = ${record.id}`;
+
+  redirect("/login?reset=ok");
 }

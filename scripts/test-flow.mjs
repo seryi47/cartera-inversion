@@ -77,9 +77,32 @@ async function main() {
   const afterDelete = await sql`SELECT COUNT(*)::int AS n FROM contributions WHERE user_id = ${userId}`;
   console.log("✓ Tras borrar, contribuciones restantes:", afterDelete[0].n, "(esperado: 0)");
 
-  // 7. Limpieza final
+  // 7. Flujo de restablecer contraseña (igual que forgotPasswordAction/resetPasswordAction)
+  const resetToken = randomUUID() + randomUUID();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  await sql`
+    INSERT INTO password_reset_tokens (user_id, token, expires_at)
+    VALUES (${userId}, ${resetToken}, ${expiresAt.toISOString()})
+  `;
+  console.log("✓ Token de restablecimiento creado");
+
+  const newHash = await bcrypt.hash("nuevaPassword456", 10);
+  await sql`UPDATE users SET password_hash = ${newHash} WHERE id = ${userId}`;
+  await sql`UPDATE password_reset_tokens SET used_at = now() WHERE token = ${resetToken}`;
+
+  const [updatedUser] = await sql`SELECT password_hash FROM users WHERE id = ${userId}`;
+  const newPasswordWorks = await bcrypt.compare("nuevaPassword456", updatedUser.password_hash);
+  const oldPasswordRejected = !(await bcrypt.compare("password123", updatedUser.password_hash));
+  console.log("✓ Nueva contraseña tras reset funciona:", newPasswordWorks);
+  console.log("✓ Contraseña vieja ya no funciona:", oldPasswordRejected);
+
+  const [tokenRow] = await sql`SELECT used_at FROM password_reset_tokens WHERE token = ${resetToken}`;
+  console.log("✓ Token marcado como usado:", tokenRow.used_at !== null);
+  if (!newPasswordWorks || !oldPasswordRejected) throw new Error("¡El reset de contraseña no cuadra!");
+
+  // 8. Limpieza final
   await sql`DELETE FROM users WHERE id = ${userId}`;
-  console.log("✓ Usuario de prueba eliminado (cascada se llevó fondos también)");
+  console.log("✓ Usuario de prueba eliminado (cascada se llevó fondos y tokens también)");
 
   console.log("\n✅ TODO EL FLUJO FUNCIONA CORRECTAMENTE CONTRA LA BASE DE DATOS REAL");
 }
