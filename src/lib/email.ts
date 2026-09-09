@@ -1,9 +1,9 @@
 import { Resend } from "resend";
 
-// Con la cuenta gratuita de Resend (sin dominio propio verificado), su remitente
-// de pruebas "onboarding@resend.dev" solo permite mandar al email con el que te
-// registraste en Resend — es la limitación normal del plan gratis, no un bug.
-const FROM = process.env.RESEND_FROM || "Cartera de Inversión <onboarding@resend.dev>";
+// cometia.es ya está verificado en la cuenta de Resend del usuario, así que
+// podemos mandar a cualquier destinatario (no solo al email de la cuenta de
+// Resend, como pasaría con el remitente de pruebas onboarding@resend.dev).
+const FROM = process.env.RESEND_FROM || "Cartera de Inversión <cartera@cometia.es>";
 
 export async function sendPasswordResetEmail(to: string, resetUrl: string) {
   const apiKey = process.env.RESEND_API_KEY;
