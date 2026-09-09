@@ -9,7 +9,10 @@ export default function AddContributionForm({ funds }: { funds: Fund[] }) {
   const [mode, setMode] = useState<"auto" | "manual">("auto");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const today = new Date().toISOString().slice(0, 10);
+  // fecha local del navegador (no UTC) — con toISOString() cerca de medianoche
+  // en España el campo podía pre-rellenarse con el día siguiente
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   function handleSubmit(formData: FormData) {
     setError(null);

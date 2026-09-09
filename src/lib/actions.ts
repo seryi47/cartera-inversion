@@ -67,13 +67,28 @@ export async function signUpAction(_prevState: unknown, formData: FormData) {
 }
 
 async function resolvePriceForDate(isin: string, date: string): Promise<number | null> {
-  // precio más reciente conocido en o antes de esa fecha
+  const todayUtc = new Date().toISOString().slice(0, 10);
+
+  // Aportación de "hoy" (o de "hoy" en la hora local del usuario, que puede ir
+  // por delante del UTC del servidor cerca de medianoche): usamos el precio EN
+  // VIVO, no el del último cron, que puede ser de anoche y no reflejar el precio
+  // en el momento exacto en que se mete el dinero.
+  if (date >= todayUtc) {
+    try {
+      return await getFundPriceEur(isin);
+    } catch (e) {
+      console.error(`[resolvePriceForDate] precio en vivo falló para ${isin}, uso el histórico más reciente:`, e);
+    }
+  }
+
+  // fecha pasada (o el precio en vivo falló): precio más reciente conocido en o antes de esa fecha
   const rows = await sql`
     SELECT price_eur FROM price_history
     WHERE isin = ${isin} AND date <= ${date}
     ORDER BY date DESC LIMIT 1
   `;
   if (rows[0]) return Number(rows[0].price_eur);
+
   // sin histórico para esa fecha (p.ej. fondo recién añadido) — probamos el precio en vivo
   try {
     return await getFundPriceEur(isin);

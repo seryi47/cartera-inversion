@@ -59,6 +59,7 @@ export default function PerformanceChart({ data }: { data: Point[] }) {
   const gain = last.value - last.costBasis;
   const gainPct = last.costBasis > 0 ? (gain / last.costBasis) * 100 : 0;
   const isPositive = gain >= 0;
+  const hasEnoughForChart = filtered.length >= 2;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
@@ -82,7 +83,7 @@ export default function PerformanceChart({ data }: { data: Point[] }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
         <div>
           <p className="text-xs text-slate-500">Valor actual</p>
           <p className="text-xl font-bold text-slate-900">{fmt(last.value)}</p>
@@ -101,54 +102,66 @@ export default function PerformanceChart({ data }: { data: Point[] }) {
         </div>
       </div>
 
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={filtered} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="valueFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis
-              dataKey="date"
-              tick={{ fontSize: 11, fill: "#64748b" }}
-              tickFormatter={(d: string) =>
-                new Date(d + "T00:00:00Z").toLocaleDateString("es-ES", { day: "2-digit", month: "short", timeZone: "UTC" })
-              }
-              minTickGap={40}
-            />
-            <YAxis
-              tick={{ fontSize: 11, fill: "#64748b" }}
-              tickFormatter={(v: number) => `${Math.round(v)}€`}
-              width={55}
-            />
-            <Tooltip
-              formatter={(value, name) => [fmt(Number(value)), name === "value" ? "Valor" : "Aportado"]}
-              labelFormatter={(label) =>
-                new Date(String(label) + "T00:00:00Z").toLocaleDateString("es-ES", {
-                  day: "2-digit",
-                  month: "long",
-                  year: "numeric",
-                  timeZone: "UTC",
-                })
-              }
-              contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13 }}
-            />
-            <Area type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={2} fill="url(#valueFill)" />
-            <Line type="monotone" dataKey="costBasis" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="flex gap-4 mt-2 text-xs text-slate-500">
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-3 h-0.5 bg-blue-600" /> Valor de la cartera
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block w-3 h-0.5 bg-slate-400" style={{ borderTop: "1.5px dashed #94a3b8" }} /> Aportado
-        </span>
-      </div>
+      {hasEnoughForChart ? (
+        <>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={filtered} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="valueFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11, fill: "#64748b" }}
+                  tickFormatter={(d: string) =>
+                    new Date(d + "T00:00:00Z").toLocaleDateString("es-ES", { day: "2-digit", month: "short", timeZone: "UTC" })
+                  }
+                  minTickGap={40}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#64748b" }}
+                  tickFormatter={(v: number) => `${Math.round(v)}€`}
+                  width={55}
+                  domain={["dataMin", "dataMax"]}
+                />
+                <Tooltip
+                  formatter={(value, name) => [fmt(Number(value)), name === "value" ? "Valor" : "Aportado"]}
+                  labelFormatter={(label) =>
+                    new Date(String(label) + "T00:00:00Z").toLocaleDateString("es-ES", {
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric",
+                      timeZone: "UTC",
+                    })
+                  }
+                  contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13 }}
+                />
+                <Area type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={2} fill="url(#valueFill)" />
+                <Line type="monotone" dataKey="costBasis" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 4" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex gap-4 mt-2 text-xs text-slate-500">
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-3 h-0.5 bg-blue-600" /> Valor de la cartera
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-3 h-0.5 bg-slate-400" style={{ borderTop: "1.5px dashed #94a3b8" }} /> Aportado
+            </span>
+          </div>
+        </>
+      ) : (
+        <div className="h-40 flex items-center justify-center rounded-lg bg-slate-50 border border-dashed border-slate-200">
+          <p className="text-sm text-slate-500 text-center px-6">
+            Con un solo día de datos aún no hay curva que dibujar — vuelve mañana (o registra otra
+            aportación en otra fecha) y aquí aparecerá la evolución.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
