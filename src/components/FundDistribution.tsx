@@ -45,7 +45,6 @@ export default function FundDistribution({
         const actual = totalByFund[f.id] || 0;
         const actualPct = totalInvested > 0 ? (actual / totalInvested) * 100 : 0;
         const targetPct = Number(f.target_weight) * 100;
-        const drift = actualPct - targetPct;
         const isEditing = editingId === f.id;
 
         return (
@@ -99,13 +98,6 @@ export default function FundDistribution({
                   >
                     objetivo {targetPct.toFixed(0)}%
                   </button>
-                )}
-
-                {!isEditing && Math.abs(drift) >= 2 && (
-                  <span className={drift > 0 ? "text-amber-600" : "text-blue-600"}>
-                    ({drift > 0 ? "+" : ""}
-                    {drift.toFixed(1)} pts)
-                  </span>
                 )}
               </span>
             </div>

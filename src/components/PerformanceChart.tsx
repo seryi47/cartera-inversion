@@ -73,9 +73,20 @@ export default function PerformanceChart({ daily, intraday }: { daily: DailyPoin
   const filtered = useMemo(() => {
     const cutoff = cutoffFor(period);
     if (cutoff == null) return allPoints;
-    const idx = allPoints.findIndex((p) => p.x >= cutoff);
-    return idx <= 0 ? allPoints : allPoints.slice(Math.max(0, idx - 1));
+    // sin punto de "contexto" antes del corte: si lo dejamos, un valor bajo
+    // de justo antes de la ventana obliga al eje Y a estirarse desde ahí,
+    // aplastando visualmente la variación real de la ventana seleccionada
+    return allPoints.filter((p) => p.x >= cutoff);
   }, [allPoints, period]);
+
+  const yDomain = useMemo((): [number, number] => {
+    if (filtered.length === 0) return [0, 1];
+    const values = filtered.flatMap((p) => [p.value, p.costBasis]);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const pad = Math.max((max - min) * 0.1, max * 0.01, 1);
+    return [Math.max(0, min - pad), max + pad];
+  }, [filtered]);
 
   if (daily.length === 0) {
     return (
@@ -160,7 +171,7 @@ export default function PerformanceChart({ daily, intraday }: { daily: DailyPoin
                   tick={{ fontSize: 11, fill: "#64748b" }}
                   tickFormatter={(v: number) => `${Math.round(v)}€`}
                   width={55}
-                  domain={["dataMin", "dataMax"]}
+                  domain={yDomain}
                 />
                 <Tooltip
                   formatter={(value, name) => [fmt(Number(value)), name === "value" ? "Valor" : "Aportado"]}
