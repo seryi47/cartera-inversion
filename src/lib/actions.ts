@@ -9,6 +9,7 @@ import { randomUUID } from "crypto";
 import { DEFAULT_PORTFOLIO } from "@/lib/default-portfolio";
 import { AuthError } from "next-auth";
 import { sendPasswordResetEmail } from "@/lib/email";
+import { getFundPriceEur } from "@/lib/fund-price";
 
 export async function loginAction(_prevState: unknown, formData: FormData) {
   const email = String(formData.get("email") || "").trim().toLowerCase();
@@ -65,6 +66,23 @@ export async function signUpAction(_prevState: unknown, formData: FormData) {
   redirect("/");
 }
 
+async function resolvePriceForDate(isin: string, date: string): Promise<number | null> {
+  // precio más reciente conocido en o antes de esa fecha
+  const rows = await sql`
+    SELECT price_eur FROM price_history
+    WHERE isin = ${isin} AND date <= ${date}
+    ORDER BY date DESC LIMIT 1
+  `;
+  if (rows[0]) return Number(rows[0].price_eur);
+  // sin histórico para esa fecha (p.ej. fondo recién añadido) — probamos el precio en vivo
+  try {
+    return await getFundPriceEur(isin);
+  } catch (e) {
+    console.error(`[resolvePriceForDate] no pude resolver precio para ${isin}:`, e);
+    return null;
+  }
+}
+
 export async function addContributionRoundAction(formData: FormData) {
   const session = await auth();
   if (!session?.user) redirect("/login");
@@ -77,7 +95,7 @@ export async function addContributionRoundAction(formData: FormData) {
   if (!date) return { error: "Falta la fecha." };
 
   const funds = await sql`
-    SELECT id, target_weight FROM funds WHERE user_id = ${userId} ORDER BY sort_order
+    SELECT id, isin, target_weight FROM funds WHERE user_id = ${userId} ORDER BY sort_order
   `;
 
   if (mode === "auto") {
@@ -86,9 +104,10 @@ export async function addContributionRoundAction(formData: FormData) {
     for (const f of funds) {
       const amount = Math.round(total * Number(f.target_weight) * 100) / 100;
       if (amount > 0) {
+        const price = f.isin ? await resolvePriceForDate(f.isin as string, date) : null;
         await sql`
-          INSERT INTO contributions (user_id, fund_id, round_id, date, amount)
-          VALUES (${userId}, ${f.id}, ${roundId}, ${date}, ${amount})
+          INSERT INTO contributions (user_id, fund_id, round_id, date, amount, price_at_purchase)
+          VALUES (${userId}, ${f.id}, ${roundId}, ${date}, ${amount}, ${price})
         `;
       }
     }
@@ -98,9 +117,10 @@ export async function addContributionRoundAction(formData: FormData) {
       const raw = formData.get(`amount_${f.id}`);
       const amount = Number(raw || 0);
       if (amount > 0) {
+        const price = f.isin ? await resolvePriceForDate(f.isin as string, date) : null;
         await sql`
-          INSERT INTO contributions (user_id, fund_id, round_id, date, amount)
-          VALUES (${userId}, ${f.id}, ${roundId}, ${date}, ${amount})
+          INSERT INTO contributions (user_id, fund_id, round_id, date, amount, price_at_purchase)
+          VALUES (${userId}, ${f.id}, ${roundId}, ${date}, ${amount}, ${price})
         `;
       }
     }
