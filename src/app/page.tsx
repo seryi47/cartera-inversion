@@ -3,6 +3,7 @@ import { sql } from "@/lib/db";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import AddContributionForm from "@/components/AddContributionForm";
+import Logo from "@/components/Logo";
 import FundDistribution from "@/components/FundDistribution";
 import DeleteRoundButton from "@/components/DeleteRoundButton";
 import SignOutButton from "@/components/SignOutButton";
@@ -59,7 +60,9 @@ export default async function DashboardPage() {
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <h1 className="font-semibold text-lg text-slate-900">💼 Patrimonio</h1>
+            <h1 className="font-semibold text-lg text-slate-900 flex items-center gap-2">
+              <Logo /> Patrimonio
+            </h1>
             <nav className="flex gap-1 text-sm">
               <span className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 font-semibold">Mi Cartera</span>
               <Link href="/mercado" className="px-3 py-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 font-medium transition">
